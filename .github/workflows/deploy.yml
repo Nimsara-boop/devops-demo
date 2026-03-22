@@ -19,10 +19,19 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Compile app
+      - name: Compile app (verify build passes)
         run: javac App.java
 
-      - name: Deploy to EC2 via SSH
+      - name: Copy playbook to EC2
+        uses: appleboy/scp-action@v0.1.4
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "deploy.yml,inventory.ini"
+          target: "/home/ubuntu/demoapp"
+
+      - name: Run Ansible playbook on EC2
         uses: appleboy/ssh-action@v1.0.0
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -30,8 +39,4 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             cd ~/demoapp
-            git pull origin main
-            javac App.java
-            pkill -f "java App" || true
-            nohup java App > app.log 2>&1 &
-            echo "Deploy complete"
+            ansible-playbook -i inventory.ini deploy.yml
