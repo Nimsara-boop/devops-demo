@@ -1,0 +1,78 @@
+---
+- name: Full app deployment
+  hosts: servers
+  become: yes
+
+  vars:
+    repo_url: "https://github.com/Nimsara-boop/devops-demo.git"
+    app_dir: "/home/ubuntu/demoapp"
+    app_user: "ubuntu"
+
+  tasks:
+
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+
+    - name: Install Java 17
+      apt:
+        name: openjdk-17-jdk
+        state: present
+
+    - name: Install Git
+      apt:
+        name: git
+        state: present
+
+    - name: Install Docker
+      apt:
+        name: docker.io
+        state: present
+
+    - name: Start and enable Docker
+      systemd:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Clone the repo
+      git:
+        repo: "{{ repo_url }}"
+        dest: "{{ app_dir }}"
+        version: main
+        force: yes
+      become_user: "{{ app_user }}"
+
+    - name: Compile the app
+      command: javac App.java
+      args:
+        chdir: "{{ app_dir }}"
+      become_user: "{{ app_user }}"
+
+    - name: Build Docker image
+      command: docker build -t demoapp .
+      args:
+        chdir: "{{ app_dir }}"
+
+    - name: Stop existing container if running
+      command: docker stop demoapp
+      ignore_errors: yes
+
+    - name: Remove existing container if present
+      command: docker rm demoapp
+      ignore_errors: yes
+
+    - name: Run the Docker container
+      command: >
+        docker run -d
+        -p 8080:8080
+        --name demoapp
+        --restart always
+        demoapp
+
+    - name: Verify app is responding
+      uri:
+        url: "http://localhost:8080/health"
+        status_code: 200
+      retries: 5
+      delay: 3
